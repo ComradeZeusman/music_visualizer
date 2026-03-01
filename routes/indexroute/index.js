@@ -51,17 +51,28 @@ router.post('/generate', upload.single('audio'), (req, res) => {
   const outputPath = path.join('outputs', outputFilename);
   const jobId = `job-${Date.now()}`;
   
-  // Beautiful centered waveform with dynamic rainbow colors
-  // Creates vertical bars that mirror up/down from center with color cycling
+  // CQT bars + neon glow bloom + 3D perspective warp + spectrogram background
+  // asplit=2: one stream for spectrogram bg, one for CQT bars
   const ffmpegArgs = [
     '-i', inputPath,
     '-filter_complex',
-    '[0:a]showfreqs=s=1920x1080:mode=bar:ascale=log:fscale=log:win_size=4096:colors=0x0000FF|0x00FFFF|0xFFFFFF|0xFFFF00|0xFF0000,hue=h=n*2:s=1,eq=brightness=0.1:contrast=1.2,format=yuv420p[v]',
+    // Split audio into 2 independent streams
+    '[0:a]asplit=2[a1][a2];' +
+    // 1. Dark spectrogram background (intensity palette, dimmed)
+    '[a1]showspectrum=s=1920x1080:mode=combined:scale=log:saturation=0.3:color=intensity,eq=brightness=-0.4:contrast=1.2[bg];' +
+    // 2. CQT bars — musical note-logarithmic, no sonogram band
+    '[a2]showcqt=s=1920x1080:count=6:tc=0.33:bar_g=3:sono_g=5:basefreq=20:endfreq=20000:bar_t=0.5:sono_h=0[cqt];' +
+    // 3. Glow/bloom: split CQT, blur one copy, screen-blend for neon effect
+    '[cqt]split[sharp][src];[src]gblur=sigma=12[glow];[sharp][glow]blend=all_mode=screen[bars];' +
+    // 4. 3D perspective warp: scale Y to 60% and shift down to simulate floor-level camera angle
+    '[bars]perspective=x0=160:y0=0:x1=1760:y1=0:x2=0:y2=1080:x3=1920:y3=1080:interpolation=linear[bars3d];' +
+    // 5. Composite: dimmed spectrogram bg → 3D bars on top
+    '[bg][bars3d]blend=all_mode=screen,format=yuv420p[v]',
     '-map', '[v]',
     '-map', '0:a',
     '-c:v', 'libx264',
-    '-preset', 'veryfast',
-    '-crf', '23',
+    '-preset', 'fast',
+    '-crf', '18',
     '-c:a', 'aac',
     '-b:a', '320k',
     '-y',
@@ -71,9 +82,11 @@ router.post('/generate', upload.single('audio'), (req, res) => {
   console.log('🚀 Starting visualization generation...');
   console.log('📝 Job ID:', jobId);
   
+  console.log('🎛️  Filter complex:', ffmpegArgs[3]);
   const ffmpeg = spawn('ffmpeg', ffmpegArgs);
   let duration = 0;
   let currentTime = 0;
+  let ffmpegStderr = '';
   
   // Initialize job tracking
   activeJobs.set(jobId, {
@@ -85,6 +98,7 @@ router.post('/generate', upload.single('audio'), (req, res) => {
 
   ffmpeg.stderr.on('data', (data) => {
     const output = data.toString();
+    ffmpegStderr += output;
     
     // Parse duration
     const durationMatch = output.match(/Duration: (\d{2}):(\d{2}):(\d{2}.\d{2})/);
@@ -122,8 +136,8 @@ router.post('/generate', upload.single('audio'), (req, res) => {
     });
 
     if (code !== 0) {
-      console.error('❌ FFmpeg exited with code:', code);
-      activeJobs.set(jobId, {
+      console.error('FFmpeg exited with code:', code);      // Print the last 2000 chars of stderr to identify the exact filter error
+      console.error('🔍 FFmpeg stderr (last 2000 chars):\n', ffmpegStderr.slice(-2000));      activeJobs.set(jobId, {
         ...activeJobs.get(jobId),
         status: 'error',
         error: 'FFmpeg processing failed'
