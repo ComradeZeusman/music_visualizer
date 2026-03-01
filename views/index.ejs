@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music Visualizer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    
+    #videoPlayer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    
+    .playing {
+      animation: pulse 1.5s infinite;
+    }
+
+    .upload-overlay {
+      backdrop-filter: blur(10px);
+      transition: opacity 0.3s ease;
+    }
+
+    .upload-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spinner {
+      animation: spin 1s linear infinite;
+    }
+
+    .progress-bar {
+      transition: width 0.3s ease;
+    }
+  </style>
+</head>
+<body class="bg-black">
+  <!-- Full-screen Video Player -->
+  <video id="videoPlayer" class="hidden" controls></video>
+
+  <!-- Upload Overlay -->
+  <div id="uploadOverlay" class="upload-overlay fixed inset-0 bg-black/80 flex items-center justify-center z-20">
+    <div class="text-center">
+      <input type="file" id="audioFile" accept="audio/*,video/*" class="hidden">
+      <label for="audioFile" class="cursor-pointer">
+        <div class="border-4 border-dashed border-white/50 rounded-3xl p-16 hover:border-white transition-all bg-black/40">
+          <svg class="mx-auto h-24 w-24 text-white mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+          </svg>
+          <h1 class="text-4xl font-bold text-white mb-3">FFmpeg Music Visualizer</h1>
+          <p class="text-white/80 text-xl mb-2">Click or Drop Audio/Video File</p>
+          <p class="text-white/50">MP3, WAV, OGG, AAC, FLAC, M4A, MP4, MKV, AVI, etc.</p>
+        </div>
+      </label>
+    </div>
+  </div>
+
+  <!-- Processing Overlay -->
+  <div id="processingOverlay" class="fixed inset-0 bg-black/90 flex items-center justify-center z-30 hidden">
+    <div class="text-center max-w-md w-full px-6">
+      <div class="mb-6">
+        <svg class="spinner mx-auto h-16 w-16 text-white" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+      <h2 class="text-3xl font-bold text-white mb-3">Generating Visualization</h2>
+      <p class="text-white/70 mb-6" id="processingMessage">Creating your audio visualization...</p>
+      
+      <!-- Progress indicator -->
+      <div class="w-full bg-white/20 rounded-full h-3 mb-3 overflow-hidden">
+        <div id="progressBar" class="progress-bar bg-gradient-to-r from-purple-500 to-pink-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+      <div class="flex justify-between text-sm mb-2">
+        <span class="text-white/70" id="progressPercent">0%</span>
+        <span class="text-white/70" id="progressTime">Calculating...</span>
+      </div>
+      <p class="text-white/50 text-sm" id="progressText">Analyzing audio...</p>
+    </div>
+  </div>
+
+  <!-- Top Control Bar -->
+  <div id="controlBar" class="fixed top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-6 z-10 hidden">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <h1 class="text-2xl font-bold text-white">🎵 FFmpeg Visualizer</h1>
+        <div id="fileName" class="text-white/70 text-sm"></div>
+      </div>
+      <div class="flex gap-3">
+        <a href="/convert" class="bg-white/20 hover:bg-white/30 text-white font-semibold py-2 px-6 rounded-full transition-all backdrop-blur">
+          Audio Converter
+        </a>
+        <button id="uploadBtn" class="bg-white/20 hover:bg-white/30 text-white font-semibold py-2 px-6 rounded-full transition-all backdrop-blur">
+          Generate New
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Get DOM elements
+    const audioFile = document.getElementById('audioFile');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileName = document.getElementById('fileName');
+    const uploadOverlay = document.getElementById('uploadOverlay');
+    const processingOverlay = document.getElementById('processingOverlay');
+    const videoPlayer = document.getElementById('videoPlayer');
+    const controlBar = document.getElementById('controlBar');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const processingMessage = document.getElementById('processingMessage');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressTime = document.getElementById('progressTime');
+
+    let currentVideoUrl = null;
+    let progressInterval = null;
+
+    // Handle file upload
+    async function handleFileUpload(file) {
+      if (!file) return;
+
+      fileName.textContent = `📁 ${file.name}`;
+      uploadOverlay.classList.add('hidden');
+      processingOverlay.classList.remove('hidden');
+      
+      progressBar.style.width = '0%';
+      progressPercent.textContent = '0%';
+      progressTime.textContent = 'Starting...';
+      progressText.textContent = 'Uploading file...';
+
+      const formData = new FormData();
+      formData.append('audio', file);
+
+      try {
+        const response = await fetch('/generate', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        
+        if (data.jobId) {
+          // Start polling for progress
+          pollProgress(data.jobId);
+        } else if (data.error) {
+          throw new Error(data.message || 'Upload failed');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        processingMessage.textContent = 'Error uploading file';
+        progressText.textContent = error.message || 'Please try again';
+        
+        setTimeout(() => {
+          processingOverlay.classList.add('hidden');
+          uploadOverlay.classList.remove('hidden');
+        }, 3000);
+      }
+    }
+
+    async function pollProgress(jobId) {
+      progressText.textContent = 'Processing video...';
+      
+      progressInterval = setInterval(async () => {
+        try {
+          const response = await fetch(`/progress/${jobId}`);
+          const data = await response.json();
+          
+          if (data.status === 'completed') {
+            clearInterval(progressInterval);
+            progressBar.style.width = '100%';
+            progressPercent.textContent = '100%';
+            progressText.textContent = 'Complete! Loading video...';
+            
+            setTimeout(() => {
+              currentVideoUrl = data.videoUrl || `/outputs/${data.outputFilename}`;
+              videoPlayer.src = currentVideoUrl;
+              videoPlayer.classList.remove('hidden');
+              processingOverlay.classList.add('hidden');
+              controlBar.classList.remove('hidden');
+              
+              videoPlayer.play().catch(e => {
+                console.log('Auto-play prevented:', e);
+              });
+            }, 500);
+          } else if (data.status === 'unknown') {
+            clearInterval(progressInterval);
+            progressText.textContent = 'Processing error - job not found';
+            setTimeout(() => {
+              processingOverlay.classList.add('hidden');
+              uploadOverlay.classList.remove('hidden');
+            }, 2000);
+          } else {
+            const progress = data.progress || 0;
+            progressBar.style.width = progress + '%';
+            progressPercent.textContent = progress + '%';
+            
+            if (data.currentTime && data.duration) {
+              const remaining = data.duration - data.currentTime;
+              const speed = data.currentTime > 0 ? progress / data.currentTime : 0;
+              const eta = speed > 0 ? remaining / speed : 0;
+              
+              progressTime.textContent = `${formatSeconds(data.currentTime)} / ${formatSeconds(data.duration)}`;
+              
+              if (eta > 0 && eta < 600) {
+                progressText.textContent = `Estimated time remaining: ${formatSeconds(eta)}`;
+              } else {
+                progressText.textContent = 'Generating visualization...';
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Progress polling error:', error);
+        }
+      }, 1000); // Poll every second
+    }
+
+    function formatSeconds(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    audioFile.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) handleFileUpload(file);
+    });
+
+    // Upload button to generate new visualization
+    uploadBtn.addEventListener('click', () => {
+      videoPlayer.pause();
+      videoPlayer.classList.add('hidden');
+      controlBar.classList.add('hidden');
+      uploadOverlay.classList.remove('hidden');
+      audioFile.click();
+    });
+
+    // Drag and drop functionality
+    document.body.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+    
+    document.body.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        handleFileUpload(file);
+      }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === ' ' && !uploadOverlay.classList.contains('hidden') === false) {
+        e.preventDefault();
+        if (videoPlayer.paused) {
+          videoPlayer.play();
+        } else {
+          videoPlayer.pause();
+        }
+      }
+    });
+  </script>
+</body>
+</html>

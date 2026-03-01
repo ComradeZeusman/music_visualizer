@@ -1,0 +1,13 @@
+node_modules/
+./node_modules
+/node_modules
+uploads/
+/uploads
+./uploads
+outputs/
+/outputs
+./outputs
+*.mp4
+*.mp3
+*.wav
+*.log

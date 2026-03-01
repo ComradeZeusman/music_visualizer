@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Converter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spinner {
+      animation: spin 1s linear infinite;
+    }
+
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-2xl">
+    <!-- Main Card -->
+    <div class="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-8 border border-white/20">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <h1 class="text-5xl font-bold text-white mb-2">🎵 Audio Converter</h1>
+        <p class="text-white/80 text-lg">Convert your audio files to any format</p>
+      </div>
+
+      <!-- Upload Section -->
+      <div class="mb-6">
+        <div class="border-2 border-dashed border-white/40 rounded-2xl p-8 text-center hover:border-white/60 transition-colors cursor-pointer bg-white/5" id="dropZone">
+          <input type="file" id="audioFile" accept="audio/*,video/*" class="hidden">
+          <label for="audioFile" class="cursor-pointer">
+            <div class="mb-4">
+              <svg class="mx-auto h-16 w-16 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+              </svg>
+            </div>
+            <p class="text-white text-xl mb-2">Click to upload or drag and drop</p>
+            <p class="text-white/60 text-sm">Audio or Video files - we'll extract the audio!</p>
+          </label>
+        </div>
+        <div id="fileName" class="mt-4 text-center text-white/90 font-medium hidden"></div>
+      </div>
+
+      <!-- Format Selection -->
+      <div class="mb-6">
+        <label class="block text-white text-lg font-semibold mb-3">Convert to (Highest Quality):</label>
+        <div class="grid grid-cols-4 gap-3">
+          <button class="format-btn bg-white/20 hover:bg-white/30 text-white font-semibold py-3 px-4 rounded-xl transition-all" data-format="mp3" title="320kbps CBR">MP3</button>
+          <button class="format-btn bg-white/20 hover:bg-white/30 text-white font-semibold py-3 px-4 rounded-xl transition-all" data-format="wav" title="24-bit PCM Lossless">WAV</button>
+          <button class="format-btn bg-white/20 hover:bg-white/30 text-white font-semibold py-3 px-4 rounded-xl transition-all" data-format="ogg" title="Quality 10 Max">OGG</button>
+          <button class="format-btn bg-white/20 hover:bg-white/30 text-white font-semibold py-3 px-4 rounded-xl transition-all" data-format="aac" title="320kbps">AAC</button>
+          <button class="format-btn bg-white/20 hover:bg-white/30 text-white font-semibold py-3 px-4 rounded-xl transition-all" data-format="flac" title="Lossless Compression">FLAC</button>
+          <button class="format-btn bg-white/20 hover:bg-white/30 text-white font-semibold py-3 px-4 rounded-xl transition-all" data-format="m4a" title="320kbps AAC">M4A</button>
+          <button class="format-btn bg-white/20 hover:bg-white/30 text-white font-semibold py-3 px-4 rounded-xl transition-all" data-format="opus" title="256kbps Max">OPUS</button>
+          <button class="format-btn bg-white/20 hover:bg-white/30 text-white font-semibold py-3 px-4 rounded-xl transition-all" data-format="wma" title="320kbps">WMA</button>
+        </div>
+      </div>
+
+      <!-- Convert Button -->
+      <button id="convertBtn" class="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold py-4 px-8 rounded-xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none" disabled>
+        Convert Audio
+      </button>
+
+      <!-- Progress Section -->
+      <div id="progressSection" class="mt-6 hidden">
+        <div class="bg-white/5 rounded-2xl p-6 text-center">
+          <svg class="spinner mx-auto h-12 w-12 text-white mb-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p class="text-white text-lg font-semibold">Converting your audio...</p>
+        </div>
+      </div>
+
+      <!-- Success Section -->
+      <div id="successSection" class="mt-6 hidden">
+        <div class="bg-green-500/20 border border-green-500/50 rounded-2xl p-6">
+          <div class="text-center mb-4">
+            <svg class="mx-auto h-12 w-12 text-green-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <p class="text-white text-lg font-semibold mb-1">Conversion Complete!</p>
+            <p class="text-white/70 text-sm" id="convertedFormat"></p>
+          </div>
+          <a id="downloadLink" class="block w-full bg-white/20 hover:bg-white/30 text-white font-bold py-3 px-6 rounded-xl text-center transition-all" download>
+            📥 Download Converted File
+          </a>
+          <button id="convertAnotherBtn" class="w-full mt-3 bg-white/10 hover:bg-white/20 text-white font-semibold py-3 px-6 rounded-xl transition-all">
+            Convert Another File
+          </button>
+        </div>
+      </div>
+
+      <!-- Error Section -->
+      <div id="errorSection" class="mt-6 hidden">
+        <div class="bg-red-500/20 border border-red-500/50 rounded-2xl p-6 text-center">
+          <svg class="mx-auto h-12 w-12 text-red-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+          <p class="text-white text-lg font-semibold mb-1">Conversion Failed</p>
+          <p class="text-white/70 text-sm" id="errorMessage"></p>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <div class="mt-6 text-center">
+        <a href="/" class="text-white/70 hover:text-white transition-colors">
+          ← Back to Visualizer
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const audioFile = document.getElementById('audioFile');
+    const dropZone = document.getElementById('dropZone');
+    const fileName = document.getElementById('fileName');
+    const formatBtns = document.querySelectorAll('.format-btn');
+    const convertBtn = document.getElementById('convertBtn');
+    const progressSection = document.getElementById('progressSection');
+    const successSection = document.getElementById('successSection');
+    const errorSection = document.getElementById('errorSection');
+    const downloadLink = document.getElementById('downloadLink');
+    const convertedFormat = document.getElementById('convertedFormat');
+    const errorMessage = document.getElementById('errorMessage');
+    const convertAnotherBtn = document.getElementById('convertAnotherBtn');
+
+    let selectedFile = null;
+    let selectedFormat = null;
+
+    // File upload
+    audioFile.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        selectedFile = file;
+        fileName.textContent = `📁 ${file.name}`;
+        fileName.classList.remove('hidden');
+        updateConvertButton();
+      }
+    });
+
+    // Drag and drop
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-white');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('border-white');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-white');
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        selectedFile = file;
+        fileName.textContent = `📁 ${file.name}`;
+        fileName.classList.remove('hidden');
+        updateConvertButton();
+      }
+    });
+
+    // Format selection
+    formatBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        formatBtns.forEach(b => {
+          b.classList.remove('ring-2', 'ring-white', 'bg-white/40');
+          b.classList.add('bg-white/20');
+        });
+        btn.classList.remove('bg-white/20');
+        btn.classList.add('ring-2', 'ring-white', 'bg-white/40');
+        selectedFormat = btn.dataset.format;
+        updateConvertButton();
+      });
+    });
+
+    function updateConvertButton() {
+      convertBtn.disabled = !(selectedFile && selectedFormat);
+    }
+
+    // Convert
+    convertBtn.addEventListener('click', async () => {
+      if (!selectedFile || !selectedFormat) return;
+
+      // Hide previous results
+      successSection.classList.add('hidden');
+      errorSection.classList.add('hidden');
+      progressSection.classList.remove('hidden');
+      convertBtn.disabled = true;
+
+      const formData = new FormData();
+      formData.append('audio', selectedFile);
+      formData.append('format', selectedFormat);
+
+      try {
+        const response = await fetch('/convert', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        progressSection.classList.add('hidden');
+
+        if (response.ok && data.success) {
+          convertedFormat.textContent = `Converted to ${data.format.toUpperCase()}`;
+          downloadLink.href = data.downloadUrl;
+          downloadLink.download = data.filename;
+          successSection.classList.remove('hidden');
+        } else {
+          errorMessage.textContent = data.error || data.message || 'Unknown error occurred';
+          errorSection.classList.remove('hidden');
+          convertBtn.disabled = false;
+        }
+      } catch (error) {
+        progressSection.classList.add('hidden');
+        errorMessage.textContent = error.message || 'Network error occurred';
+        errorSection.classList.remove('hidden');
+        convertBtn.disabled = false;
+      }
+    });
+
+    // Convert another
+    convertAnotherBtn.addEventListener('click', () => {
+      selectedFile = null;
+      selectedFormat = null;
+      fileName.classList.add('hidden');
+      formatBtns.forEach(b => {
+        b.classList.remove('ring-2', 'ring-white', 'bg-white/40');
+        b.classList.add('bg-white/20');
+      });
+      successSection.classList.add('hidden');
+      convertBtn.disabled = true;
+      audioFile.value = '';
+    });
+  </script>
+</body>
+</html>
